@@ -68,3 +68,20 @@ class PersonalInfo(BaseModel):
     role: str = Field(..., description="Current job title or role", examples=["Senior GIS Developer"])
     bio: str = Field(..., description="Short biography", examples=["Loves maps and code."])
     contact_email: str = Field(..., description="Contact email address", examples=["jane@example.com"])
+
+class BangladeshProperties(BaseModel):
+    id: int = Field(..., description="Unique ID from database")
+    shapename: str = Field(..., description="District Name")
+    shapeiso: Optional[str] = Field(None, description="ISO Code")
+    shapeid: Optional[str] = Field(None, description="Shape ID")
+    shapegroup: Optional[str] = Field(None, description="Shape Group")
+    shapetype: Optional[str] = Field(None, description="Shape Type")
+
+class BangladeshFeature(BaseModel):
+    type: str = Field("Feature", description="GeoJSON feature type")
+    geometry: Union[GeoJSONPoint, GeoJSONPolygon, GeoJSONMultiPolygon]
+    properties: BangladeshProperties
+
+class BangladeshFeatureCollection(BaseModel):
+    type: str = Field("FeatureCollection", description="GeoJSON feature collection type")
+    features: List[BangladeshFeature]
