@@ -1,6 +1,7 @@
-from fastapi import FastAPI, HTTPException
-from models import PersonalInfo, LocationFeatureCollection
-from models import PersonalInfo, LocationFeatureCollection, LocationFeature, GeoJSONPoint, GeoJSONPolygon, GeoJSONMultiPolygon, LocationProperties, MonglaFeatureCollection, ObservationFeatureCollection, ObservationFeature, ObservationProperties
+from fastapi import FastAPI, HTTPException, Response
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from models import PersonalInfo, LocationFeatureCollection, LocationFeature, GeoJSONPoint, GeoJSONPolygon, GeoJSONMultiPolygon, LocationProperties, MonglaFeatureCollection, ObservationFeatureCollection, ObservationFeature, ObservationProperties, BangladeshFeatureCollection
 from data import personal_info, location_collection, zone_collection
 from db import database
 import json
@@ -28,6 +29,14 @@ app = FastAPI(
     """,
     version="1.0.0",
     openapi_tags=tags_metadata
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:4200", "http://localhost:4200/"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 @app.on_event("startup")
@@ -167,6 +176,52 @@ async def get_observations():
         )
 
     return ObservationFeatureCollection(features=features)
+
+@app.get("/bangladesh-districts", response_model=BangladeshFeatureCollection, tags=["GIS Data"], summary="Get Bangladesh District Data (Optimized)")
+async def get_bangladesh_districts():
+    """
+    Get GIS data from the **bangladesh_level_two** table.
+    
+    **Optimized:** Uses geometry simplification (0.001 tolerance) and DB-level JSON construction 
+     to ensure fast response times for large datasets.
+    """
+    # tolerance 0.001 is ~100m, sufficient for most web maps
+    query = """
+        SELECT jsonb_build_object(
+            'type',     'FeatureCollection',
+            'features', jsonb_agg(features.feature)
+        )
+        FROM (
+          SELECT jsonb_build_object(
+            'type',       'Feature',
+            'id',         id,
+            'geometry',   ST_AsGeoJSON(ST_SimplifyPreserveTopology(geom, 0.001))::jsonb,
+            'properties', jsonb_build_object(
+                'id', row_to_json(bangladesh_level_two)->'id',
+                'shapename', shapename,
+                'shapeiso', shapeiso,
+                'shapeid', shapeid,
+                'shapegroup', shapegroup,
+                'shapetype', shapetype
+            )
+          ) AS feature
+          FROM bangladesh_level_two
+        ) features;
+    """
+    
+    try:
+        result = await database.fetch_one(query=query)
+        if not result or not result[0]:
+             return {"type": "FeatureCollection", "features": []}
+        
+        # Returning dictionary directly bypasses Pydantic validation if we use JSONResponse
+        # or if we are careful. FastAPI validates the return value against response_model.
+        # To truly bypass validation for speed, we return a JSONResponse.
+        return JSONResponse(content=result[0])
+        
+    except Exception as e:
+        print(f"DB Error: {e}")
+        raise HTTPException(status_code=500, detail=f"Database query failed: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

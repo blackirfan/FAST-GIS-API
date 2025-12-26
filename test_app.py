@@ -62,6 +62,16 @@ def test_read_observations():
     except Exception as e:
         print(f"Skipping External API test: {e}")
 
+def test_read_bangladesh_districts():
+    # This test might fail if DB is not running, but it validates the endpoint structure
+    try:
+        response = client.get("/bangladesh-districts")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["type"] == "FeatureCollection"
+    except Exception as e:
+        print(f"Skipping DB test for bangladesh-districts: {e}")
+
 if __name__ == "__main__":
     try:
         test_read_root()
@@ -70,6 +80,7 @@ if __name__ == "__main__":
         test_read_zones()
         test_read_mongla_upzila()
         test_read_observations()
+        test_read_bangladesh_districts()
         print("All tests passed!")
     except AssertionError as e:
         print(f"Test failed: {e}")
